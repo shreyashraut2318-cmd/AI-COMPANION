@@ -1,0 +1,459 @@
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Companion Chat</title>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-fade-in-up {
+            animation: fadeInUp 0.5s ease-out forwards;
+        }
+        .scrollbar-thin {
+            scrollbar-width: thin;
+            scrollbar-color: #334155 #1e293b;
+        }
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 8px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background-color: #334155;
+            border-radius: 4px;
+            border: 2px solid #1e293b;
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/client": "https://esm.sh/react-dom/client",
+    "react": "https://esm.sh/react",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/"
+  }
+}
+</script>
+</head>
+<body class="bg-slate-900 text-slate-200">
+    <div id="root"></div>
+    <script type="text/babel" data-type="module">
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom/client';
+
+// --- Inlined from types.ts ---
+const Role = {
+  User: 'user',
+  AI: 'assistant',
+};
+
+// --- Inlined from constants.ts ---
+const API_ENDPOINT = "https://contrary-easily-sole-terrorism.trycloudflare.com/v1/chat/completions";
+const MODEL_NAME = "dolphin-2.9.4-llama3.1-8b";
+
+// --- Inlined Icon Components ---
+const LoadingSpinner = () => (
+  <svg className="animate-spin h-5 w-5 text-fuchsia-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+);
+
+const MicIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
+        <path d="M5.5 10.5a.5.5 0 01.5.5v1a4 4 0 004 4h.5a.5.5 0 010 1h-.5a5 5 0 01-5-5v-1a.5.5 0 01.5-.5z" />
+        <path d="M10 15a4 4 0 004-4v-1.5a.5.5 0 011 0V11a5 5 0 01-5 5h-1a.5.5 0 010-1h1z" />
+    </svg>
+);
+
+const SendIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+    </svg>
+);
+
+const SpeakerIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M6.99 7.5a.75.75 0 011.02-.72l5.03 2.51a.75.75 0 010 1.44l-5.03 2.51a.75.75 0 01-1.02-.72V7.5z" />
+        <path d="M3 8.75A1.75 1.75 0 014.75 7h.5A1.75 1.75 0 017 8.75v2.5A1.75 1.75 0 015.25 13h-.5A1.75 1.75 0 013 11.25v-2.5z" />
+        <path d="M12.5 6.168a.75.75 0 01.998-.445c1.455.57 2.502 1.93 2.502 3.445s-1.047 2.875-2.502 3.445a.75.75 0 01-.998-.94c1.15-.455 1.952-1.528 1.952-2.505s-.802-2.05-1.952-2.505a.75.75 0 01-.445-.998z" />
+    </svg>
+);
+
+// --- Inlined UI Components ---
+
+const ChatMessage = ({ message }) => {
+    const isUser = message.role === Role.User;
+    
+    const UserIcon = () => (
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-cyan-400" viewBox="0 0 24 24" fill="currentColor">
+          <path fillRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" clipRule="evenodd" />
+      </svg>
+    );
+
+    const AIIcon = () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-fuchsia-400" viewBox="0 0 24 24" fill="currentColor">
+            <path fillRule="evenodd" d="M9.75 21.75H14.25c.414 0 .75-.336.75-.75V16.5c0-.414-.336-.75-.75-.75H9.75c-.414 0-.75.336-.75.75v4.5c0 .414.336.75.75.75zM10.5 17.25h3v3h-3v-3zM15 6.75a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V7.5a.75.75 0 01.75-.75zM8.25 7.5a.75.75 0 00-1.5 0v2.25a.75.75 0 001.5 0V7.5zM12 2.25A1.5 1.5 0 0113.5 3.75v.75a.75.75 0 001.5 0v-.75A3 3 0 0012 2.25a3 3 0 00-3 3v.75a.75.75 0 001.5 0v-.75A1.5 1.5 0 0112 2.25z" clipRule="evenodd" />
+            <path d="M6.31 9.47a.75.75 0 01-1.06-1.06l1.5-1.5a.75.75 0 011.06 1.06l-1.5 1.5zm12.44 0a.75.75 0 001.06-1.06l-1.5-1.5a.75.75 0 00-1.06 1.06l1.5 1.5zM12 7.5a4.5 4.5 0 00-4.5 4.5v1.5a.75.75 0 001.5 0v-1.5a3 3 0 013-3 3 3 0 013 3v1.5a.75.75 0 001.5 0v-1.5A4.5 4.5 0 0012 7.5z" />
+        </svg>
+    );
+
+    const wrapperClasses = isUser ? 'flex items-start gap-3 justify-end' : 'flex items-start gap-3 justify-start';
+    const bubbleClasses = isUser 
+        ? 'bg-cyan-900/50 border border-cyan-500/30 rounded-lg p-3 max-w-md text-cyan-50'
+        : 'bg-slate-800 rounded-lg p-3 max-w-md text-slate-300';
+    
+    const iconWrapperClasses = `w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ring-2 ${isUser ? 'bg-slate-700 ring-cyan-500/50' : 'bg-slate-700 ring-fuchsia-500/50'}`;
+
+    const Icon = isUser ? UserIcon : AIIcon;
+
+    return (
+        <div className={`${wrapperClasses} animate-fade-in-up`}>
+            {!isUser && (
+                <div className={iconWrapperClasses}>
+                    <Icon />
+                </div>
+            )}
+            <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+                <div className={bubbleClasses}>
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                </div>
+                <span className="text-xs text-slate-500 mt-1 px-1">{message.timestamp}</span>
+            </div>
+             {isUser && (
+                <div className={iconWrapperClasses}>
+                    <Icon />
+                </div>
+            )}
+        </div>
+    );
+};
+
+const VoiceControls = ({
+    voices,
+    selectedVoice,
+    onVoiceChange,
+    autoRead,
+    onAutoReadChange,
+    onReadLast
+}) => {
+    return (
+        <div className="flex flex-wrap items-center justify-center gap-4 p-2 bg-slate-800/50 rounded-lg">
+            <div className="flex items-center gap-2">
+                <label htmlFor="voiceSelect" className="text-sm text-slate-400">Voice:</label>
+                <select
+                    id="voiceSelect"
+                    value={selectedVoice}
+                    onChange={(e) => onVoiceChange(e.target.value)}
+                    className="bg-slate-700 border border-slate-600 rounded-md p-1.5 text-sm text-slate-200 focus:ring-2 focus:ring-fuchsia-500 focus:outline-none"
+                >
+                    {voices.map(voice => (
+                        <option key={voice.name} value={voice.name}>
+                            {voice.name} ({voice.lang})
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-400">
+                    <input
+                        type="checkbox"
+                        checked={autoRead}
+                        onChange={(e) => onAutoReadChange(e.target.checked)}
+                        className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                    />
+                    Auto-Read Replies
+                </label>
+            </div>
+            
+            <button
+                onClick={onReadLast}
+                className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-md text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                aria-label="Read last AI reply"
+            >
+                <SpeakerIcon />
+                Read Last
+            </button>
+        </div>
+    );
+};
+
+const ChatInput = ({ onSendMessage, isLoading, isListening, onMicClick }) => {
+    const [inputValue, setInputValue] = useState('');
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!inputValue.trim()) return;
+        onSendMessage(inputValue);
+        setInputValue('');
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit(e);
+        }
+    };
+    
+    useEffect(() => {
+        const textarea = document.querySelector('textarea');
+        if (textarea) {
+            textarea.style.height = 'auto';
+            const scrollHeight = textarea.scrollHeight;
+            textarea.style.height = `${scrollHeight}px`;
+            if (scrollHeight > 200) {
+                 textarea.style.overflowY = 'scroll';
+            } else {
+                 textarea.style.overflowY = 'hidden';
+            }
+        }
+    }, [inputValue]);
+
+
+    return (
+        <form onSubmit={handleSubmit} className="flex items-end gap-2 bg-slate-800 p-2 rounded-lg border border-slate-700 focus-within:ring-2 focus-within:ring-cyan-500 transition-shadow duration-300">
+            <textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type your message or use the microphone..."
+                className="flex-1 bg-transparent p-2 outline-none resize-none text-slate-200 placeholder-slate-500 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent"
+                rows={1}
+                disabled={isLoading}
+                style={{maxHeight: '200px'}}
+            />
+            <div className="flex flex-col gap-2">
+              <button
+                  type="button"
+                  onClick={onMicClick}
+                  disabled={isLoading}
+                  className={`p-2 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 ${
+                      isListening ? 'bg-red-500 animate-pulse text-white' : 'bg-slate-700 hover:bg-fuchsia-600 text-fuchsia-300'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  aria-label="Use Microphone"
+              >
+                  <MicIcon />
+              </button>
+              <button
+                  type="submit"
+                  disabled={isLoading || !inputValue.trim()}
+                  className="p-2 rounded-full bg-slate-700 hover:bg-cyan-600 text-cyan-300 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  aria-label="Send Message"
+              >
+                  <SendIcon />
+              </button>
+            </div>
+        </form>
+    );
+};
+
+
+// --- Main App Component ---
+const App = () => {
+    const [messages, setMessages] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isListening, setIsListening] = useState(false);
+    const [voices, setVoices] = useState([]);
+    const [selectedVoice, setSelectedVoice] = useState('');
+    const [autoRead, setAutoRead] = useState(true);
+    
+    const chatContainerRef = useRef(null);
+
+    const loadVoices = useCallback(() => {
+        const availableVoices = window.speechSynthesis.getVoices();
+        if (availableVoices.length > 0) {
+            setVoices(availableVoices);
+            const defaultVoice = availableVoices.find(v => v.default) || availableVoices[0];
+            setSelectedVoice(defaultVoice.name);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadVoices();
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+    }, [loadVoices]);
+
+    useEffect(() => {
+        chatContainerRef.current?.scrollTo({
+            top: chatContainerRef.current.scrollHeight,
+            behavior: 'smooth'
+        });
+    }, [messages]);
+
+    const speak = useCallback((text) => {
+        if (!text) return;
+        window.speechSynthesis.cancel(); // Cancel any previous speech
+        const utterance = new SpeechSynthesisUtterance(text);
+        const voice = voices.find(v => v.name === selectedVoice);
+        if (voice) {
+            utterance.voice = voice;
+        }
+        window.speechSynthesis.speak(utterance);
+    }, [voices, selectedVoice]);
+
+    const handleSendMessage = async (text) => {
+        if (!text.trim() || isLoading) return;
+
+        const userMessage = { role: Role.User, content: text, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+        setMessages(prev => [...prev, userMessage]);
+        setIsLoading(true);
+
+        const conversationHistory = [...messages, userMessage].map(msg => ({
+            role: msg.role,
+            content: msg.content
+        }));
+
+        try {
+            const res = await fetch(API_ENDPOINT, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: MODEL_NAME,
+                    messages: conversationHistory,
+                    max_tokens: 512,
+                })
+            });
+
+            if (!res.ok) {
+                throw new Error(`API error: ${res.statusText}`);
+            }
+
+            const data = await res.json();
+            const reply = data?.choices?.[0]?.message?.content || "Sorry, I couldn't get a response.";
+            const aiMessage = { role: Role.AI, content: reply, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+            setMessages(prev => [...prev, aiMessage]);
+
+            if (autoRead) {
+                speak(reply);
+            }
+
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
+            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            setMessages(prev => [...prev, { role: Role.AI, content: `⚠️ Error: ${errorMessage}`, timestamp }]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    const handleMicClick = () => {
+        const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Speech recognition is not supported in this browser.");
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = "en-US";
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => setIsListening(true);
+        recognition.onend = () => setIsListening(false);
+        recognition.onerror = (event) => {
+            console.error("Speech recognition error:", event.error);
+            setIsListening(false);
+        };
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            handleSendMessage(transcript);
+        };
+
+        recognition.start();
+    };
+
+    const handleReadLast = () => {
+        const lastAiMessage = [...messages].reverse().find(m => m.role === Role.AI);
+        if (lastAiMessage) {
+            speak(lastAiMessage.content);
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-screen bg-slate-900 text-slate-100 p-4 max-w-4xl mx-auto">
+            <header className="text-center p-4 border-b border-cyan-500/20">
+                <h1 className="text-4xl font-orbitron text-cyan-400 tracking-widest">
+                    AI COMPANION
+                </h1>
+                <p className="text-slate-400 text-sm">Your Personal Conversational AI</p>
+            </header>
+
+            <main ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 my-4 space-y-6 scrollbar-thin">
+                {messages.map((msg, index) => (
+                    <ChatMessage key={index} message={msg} />
+                ))}
+                {isLoading && (
+                    <div className="flex items-start gap-3 justify-start">
+                        <div className="w-8 h-8 rounded-full bg-slate-700 flex-shrink-0 flex items-center justify-center ring-2 ring-fuchsia-500/50">
+                          <LoadingSpinner />
+                        </div>
+                        <div className="bg-slate-800 rounded-lg p-3 max-w-md animate-pulse">
+                            <span className="text-slate-400">Thinking...</span>
+                        </div>
+                    </div>
+                )}
+            </main>
+
+            <footer className="space-y-4">
+                <VoiceControls
+                    voices={voices}
+                    selectedVoice={selectedVoice}
+                    onVoiceChange={setSelectedVoice}
+                    autoRead={autoRead}
+                    onAutoReadChange={setAutoRead}
+                    onReadLast={handleReadLast}
+                />
+                <ChatInput
+                    onSendMessage={handleSendMessage}
+                    isLoading={isLoading}
+                    isListening={isListening}
+                    onMicClick={handleMicClick}
+                />
+            </footer>
+        </div>
+    );
+};
+
+
+// --- React Root Rendering ---
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+    throw new Error("Could not find root element to mount to");
+}
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+    <React.StrictMode>
+        <App />
+    </React.StrictMode>
+);
+
+    </script>
+</body>
+</html>
